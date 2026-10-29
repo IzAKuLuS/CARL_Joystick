@@ -1,6 +1,0 @@
-90M  ~/field_2026_09_27/phase0/bag_static_10min
-196M  ~/field_2026_09_27/phase0/bag_static_run4
-90M  ~/field_2026_09_27/phase0/bag_static_run5
-55M  ~/field_2026_09_27/phase0/minimal/bag_rtk_fixed
-85M  ~/field_2026_09_27/phase0/run6/bag_static
-85M  ~/field_2026_09_27/phase0/run7_mag/bag_static

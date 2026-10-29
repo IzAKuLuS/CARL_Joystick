@@ -1,5 +1,0 @@
-# Xsens MTi USB converter (FTDI chip, driver ftdi_sio): set the USB latency timer to 1 ms.
-# The FTDI default of 16 ms holds IMU data in the chip, so /imu/data arrives in bursts
-# (measured 2026-09-30: 65 % of messages < 2 ms apart, gaps up to 38 ms at 100 Hz).
-# Install: see docs/imu_usb_latency_2026_09_30.md
-ACTION=="add|change", SUBSYSTEM=="usb-serial", DRIVER=="ftdi_sio", ATTRS{idVendor}=="2639", ATTR{latency_timer}="1"

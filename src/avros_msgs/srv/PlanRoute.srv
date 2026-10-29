@@ -1,7 +1,0 @@
-float64 destination_lat
-float64 destination_lon
----
-bool success
-string message
-float64 distance_meters
-uint32 num_waypoints

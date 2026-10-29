@@ -1,41 +1,11 @@
+# Generated ROS workspace output
 build/
 install/
 log/
+
+# Python build and test output
 __pycache__/
-*.pyc
+*.py[cod]
 *.egg-info/
-.colcon/
-src/xsens_mti/
-src/zed-ros2-wrapper/
-src/semantic_segmentation_layer/
-
-# Model weights — never commit (156 MB+). Built by scripts/fetch_yolopv2_model.py
-# and kept out of the tree; the pipeline finds them via yolopv2_model_path / env.
-*.onnx
-*.pt
-
-# Claude Code working dirs
-.claude/
-.playwright-mcp/
-.playwright-cli/
-
-# Bulk test/recording data — never commit (rosbags, sensor-logger episodes,
-# experiment frame dumps). Lives on whichever machine recorded it; not synced
-# through git. See docs/2026-10/repo_sync_audit_and_cleanup_plan_2026_10_09.md.
-bags/
-data_logger/
-exp_frames/
-
-# Reference clone of another team's codebase (competitor research, has its
-# own nested .git) — kept out of this repo's history entirely.
-robojackets/
-
-# Stray screenshots at repo root (Claude/playwright artefacts that
-# get dropped here from unrelated sessions). Legitimate images live
-# under docs/ — keep this list explicit instead of blanket /*.png
-# so we don't silently swallow real assets.
-/amazon-*.png
-/at-b3.png
-/scale-page.png
-/sheet-*.png
-/solidremote.png
+.pytest_cache/
+.venv/

@@ -1,5 +1,0 @@
-samples: gnss 240, filter 6000, imu 6001
-IMU yaw (ENU) -37.0 deg
-offset filter -> gnss: east +0.592 m, north -0.484 m, length 0.764 m, bearing (ENU) -39.3 deg
-in vehicle frame: forward +0.764 m, left -0.031 m   (configured lever arm: +0.740 forward)
-rtk_status now: 1

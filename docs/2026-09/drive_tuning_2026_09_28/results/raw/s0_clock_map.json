@@ -1,9 +1,0 @@
-{
- "samples": 1006,
- "drift_ppm": 90.75367869626483,
- "residual_ms_p50": -0.04601478576660156,
- "residual_ms_p99": 2.552509307861328,
- "residual_ms_min": -2.7780532836914062,
- "residual_ms_max": 2.8388500213623047,
- "pass_p99_le_2ms": false
-}

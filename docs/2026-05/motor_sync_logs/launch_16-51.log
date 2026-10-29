@@ -1,4 +1,0 @@
-1778025115.7779639 [INFO] [launch]: All log files can be found below /home/dinosaur/.ros/log/2026-05-05-16-51-55-775580-ubuntu-2447
-1778025115.7782302 [INFO] [launch]: Default logging verbosity is set to INFO
-1778025115.8863263 [INFO] [actuator_node-1]: process started with pid [2472]
-1778025115.8866589 [INFO] [webui_node-2]: process started with pid [2474]

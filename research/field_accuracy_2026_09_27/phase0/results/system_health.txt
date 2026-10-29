@@ -1,7 +1,0 @@
-time_local: 2026-09-27 16:31:16 PDT
-teensy: DIAG tx=2246 rx=2377 wdt=1 mode=VEL L=0/0/0 R=-0/0/0 duty L=0.000 R=0.000 V=12.22 M=100.00 burn=-1/-1
-ntp: yes
-uptime_load: 0.39 0.27 0.20 1/493 4274
-cpu_temps_mC: 52375 49375 50468 48718 52593 
-disk_free:  843G
-git: f242825 teensy_diff_drive: add setpoint slew-rate ramp and BURN result reporting
