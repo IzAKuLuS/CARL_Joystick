@@ -133,5 +133,68 @@ class ServerTest(unittest.TestCase):
                 self.assertEqual(self.commands, [])
 
 
+@unittest.skipIf(TestClient is None, 'Install FastAPI and httpx to test the server')
+class RecordingServerTest(ServerTest):
+    def setUp(self):
+        super().setUp()
+        from carl_joystick.run_log import RunLog
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.recorder = RunLog(self.directory.name)
+        self.addCleanup(self.recorder.close)
+        self.controller.on_record = self.recorder.emit
+        self.app = create_app(self)
+
+    def saved(self):
+        from carl_joystick.review_run import records
+        self.recorder.close()
+        return list(records(self.recorder.directory))
+
+    def test_correlated_command_history_does_not_include_lease_secrets(self):
+        with TestClient(self.app) as client:
+            with client.websocket_connect('/ws') as ws:
+                state = self.neutral(ws)
+                token = state['token']
+                self.assertEqual(state['diagnostics'], 1)
+                ws.send_json(dict(type='control', x=0, y=1, deadman=True,
+                                  token=token, client_seq=42, client_id='phone'))
+                response = ws.receive_json()
+                self.assertEqual(response['client_seq'], 42)
+                self.assertEqual(response['session_id'], state['session_id'])
+        saved = self.saved()
+        self.assertNotIn(token, str(saved))
+        result = next(item for item in saved if item['event'] == 'command_result' and item['data']['client_seq'] == 42)
+        self.assertTrue(result['data']['state']['active'])
+        self.assertEqual(result['data']['session_id'], state['session_id'])
+        self.assertTrue(any(item['event'] == 'motion_stop' and item['data']['reason'] == 'disconnected'
+                            and item['data']['was_active'] for item in saved))
+
+    def test_browser_upload_is_bounded_redacted_and_cannot_execute_commands(self):
+        with TestClient(self.app) as client:
+            self.assertEqual(client.post('/diagnostics', json=[{'event': 'offline', 'token': 'private',
+                                                               'data': {'type': 'estop'}}],
+                                         headers={'Origin': 'http://phone:8000'}).status_code, 200)
+            self.assertEqual(client.post('/diagnostics', json=[{}] * 101).status_code, 400)
+            self.assertEqual(client.post('/diagnostics', content='x' * 65537).status_code, 413)
+            self.assertEqual(client.get('/health', headers={'Origin': 'http://phone:8000'}).headers[
+                'access-control-allow-origin'], '*')
+            self.assertEqual(self.estops, [])
+            self.assertEqual(self.commands, [])
+            self.assertIsNone(self.controller.owner)
+        self.assertNotIn('private', str(self.saved()))
+
+    def test_idle_estop_and_invalid_json_are_recorded(self):
+        with TestClient(self.app) as client:
+            with client.websocket_connect('/ws') as ws:
+                self.send(ws, {'type': 'estop'})
+                ws.send_text('{')
+                with self.assertRaises(WebSocketDisconnect):
+                    ws.receive_json()
+        saved = self.saved()
+        self.assertTrue(any(item['event'] == 'motion_stop' and item['data']['reason'] == 'estop'
+                            and not item['data']['was_active'] for item in saved))
+        self.assertTrue(any(item['event'] == 'packet_error' for item in saved))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -13,5 +13,6 @@ setup(
     extras_require={'test': ['httpx']},
     maintainer='AV Lab', maintainer_email='avlab@cpp.edu', license='MIT',
     description='CARL WebSocket joystick to per-wheel ROS commands',
-    entry_points={'console_scripts': ['webui_node = carl_joystick.webui_node:main']},
+    entry_points={'console_scripts': ['webui_node = carl_joystick.webui_node:main',
+                                      'carl_log_review = carl_joystick.review_run:main']},
 )

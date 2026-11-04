@@ -9,35 +9,54 @@ def axis(value):
     return float(value)
 
 
-def mix(x, y, max_throttle=0.4, max_turn=0.4, deadzone=0.05):
+def mix(x, y, max_throttle=0.75, max_turn=0.4, deadzone=0.05,
+        throttle_exponent=2.0):
     """Screen right = clockwise; positive output drives each wheel forward.
 
+    Shape signed forward/reverse travel after rescaling the deadzone, before
+    mixing with the existing linear turn response. Exponent 2 gives finer
+    low-speed control; exponent 1 restores the linear throttle mapping.
     Normalize both sides together to preserve curvature and cap *each* wheel
     at max_throttle, including when forward and turn are combined.
     """
     x, y = axis(x), axis(y)
+    validate_throttle_exponent(throttle_exponent)
     def dz(value):
         return math.copysign(max(0, abs(value) - deadzone) / (1 - deadzone), value)
-    forward, turn = dz(y) * max_throttle, dz(x) * max_turn
+    travel = dz(y)
+    forward = math.copysign(abs(travel) ** throttle_exponent, travel) * max_throttle
+    turn = dz(x) * max_turn
     left, right = forward + turn, forward - turn
     scale = max(1.0, abs(left) / max_throttle, abs(right) / max_throttle)
     return left / scale, right / scale
 
 
+def validate_throttle_exponent(value):
+    if type(value) not in (float, int) or not math.isfinite(value) or not 1 <= value <= 3:
+        raise ValueError('throttle_exponent must be a finite number between 1 and 3')
+
+
 class Controller:
     def __init__(self, publish, estop, *, now=time.monotonic,
-                 max_throttle=0.4, max_turn=0.4, input_timeout=0.25,
-                 on_event=lambda message: None):
+                 max_throttle=0.75, max_turn=0.4, input_timeout=0.25,
+                 throttle_exponent=2.0,
+                 on_event=lambda message: None, on_record=lambda event, **fields: None):
         for value in (max_throttle, max_turn):
             if not math.isfinite(value) or not 0 < value <= 1:
                 raise ValueError('Output limits must be in (0, 1]')
         if not math.isfinite(input_timeout) or not 0.05 <= input_timeout <= 0.25:
             raise ValueError('input_timeout must be between 0.05 and 0.25 seconds')
+        validate_throttle_exponent(throttle_exponent)
         self.publish, self.estop, self.now = publish, estop, now
         self.on_event = on_event
+        self.on_record = on_record
+        self.session_id = None
+        self.packet_seq = None
+        self.publish_source = None
         self.last_stop_reason = 'startup'
         self.stop_count = 0
         self.max_throttle, self.max_turn = max_throttle, max_turn
+        self.throttle_exponent = throttle_exponent
         self.input_timeout = input_timeout
         self.owner = None
         self.active = False
@@ -65,6 +84,10 @@ class Controller:
         return None
 
     def stop(self, reason='released'):
+        self.on_record('motion_stop', session_id=self.session_id, packet_seq=self.packet_seq,
+                       reason=reason, was_active=self.active, previous_wheels=self.wheels,
+                       input_age_s=None if self.last_input is None else self.now() - self.last_input,
+                       blocked_reason=self.blocked_reason())
         if self.active:
             self.stop_count += 1
             self.last_stop_reason = reason
@@ -74,6 +97,7 @@ class Controller:
         self.active = False
         self.neutral_required = True
         self.wheels = (0.0, 0.0)
+        self.publish_source = reason
         self.publish(0.0, 0.0)
 
     def claim(self, owner):
@@ -109,9 +133,11 @@ class Controller:
                 elif self.neutral_required or not self.ready():
                     self.stop(self.blocked_reason() or 'neutral_required')
                 else:
-                    self.wheels = mix(x, y, self.max_throttle, self.max_turn)
+                    self.wheels = mix(x, y, self.max_throttle, self.max_turn,
+                                      throttle_exponent=self.throttle_exponent)
                     self.active = True
                     self.last_input = self.now()
+                    self.publish_source = 'accepted_input'
                     self.publish(*self.wheels)
             elif kind == 'estop':
                 self.stop('estop')
@@ -140,6 +166,7 @@ class Controller:
     def tick(self):
         self.check_freshness()
         if self.active:
+            self.publish_source = 'refresh'
             self.publish(*self.wheels)
 
     def state(self):
@@ -148,6 +175,7 @@ class Controller:
                 'estop': self.local_estop or bool(self.heartbeat and self.heartbeat[1]),
                 'left': self.wheels[0], 'right': self.wheels[1],
                 'max_throttle': self.max_throttle,
+                'throttle_exponent': self.throttle_exponent,
                 'blocked_reason': self.blocked_reason(),
                 'last_stop_reason': self.last_stop_reason,
                 'stop_count': self.stop_count}

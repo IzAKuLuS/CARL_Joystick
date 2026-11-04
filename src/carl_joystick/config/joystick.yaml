@@ -1,8 +1,19 @@
 carl_joystick:
   ros__parameters:
     web_port: 8001
-    max_throttle: 0.4
+    max_throttle: 0.75
     max_turn: 0.4
+    # Signed power curve after the 5% deadzone: 1.0 linear, 2.0 quadratic, 3.0 cubic.
+    # Higher values soften low/mid throttle; full stick retains max_throttle.
+    throttle_exponent: 2.0
     input_timeout: 0.25
+    # Each process start creates a new run. First segment + recent tail are retained.
+    log_dir: '~/.ros/carl_test_runs'
+    test_label: ''  # Operator description, e.g. parking-lot run 3
+    log_max_mb: 32
+    log_max_files: 32
+    # Optional independent server internet probe, every 5 s; no control dependency.
+    # Use an HTTP(S) connectivity endpoint you trust. Empty disables external requests.
+    internet_probe_url: ''
     ssl_certfile: ''
     ssl_keyfile: ''
