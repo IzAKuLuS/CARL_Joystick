@@ -94,7 +94,7 @@ address in the page. The existing `http.server` workflow on port 8000 also works
   `sign(t) * 0.75 * (max(0, abs(t) - 0.05) / 0.95)^2`.
   At 10%, 25%, 50%, 75%, 95%, and 100% travel, this gives approximately 0.2%,
   3.3%, 16.8%, 40.7%, 67.3%, and 75.0% throttle. Reverse uses the same curve.
-  The browser passes nipplejs's normalized displacement directly to the server,
+  The browser passes the native pointer control's normalized displacement to the server,
   so the curve is applied once and API clients receive the same response.
   The page displays the server's signed left/right command percentages and its
   configured limit; these are separate from applied-output telemetry.
@@ -410,11 +410,25 @@ the controls source directory with `CARL_CONTROLS_DIR=/absolute/path/to/src` if
 the checkout is elsewhere. No serial or UDP hardware transports are opened.
 
 Throttle-curve validation also runs the actual UI script and browser transport
-together, injecting the pinned nipplejs displacement contract from center to rim
+together, injecting native pointer events from center to rim
 in both directions. It verifies percentages, the 5% center band, bridge per-mille
 outputs for quadratic light/intermediate/full throttle, the 75% cap, release and recovery.
 The firmware host suite additionally checks those quantized commands against
 actual throttle-node PWM and telemetry, including its unchanged 2% deadband.
+
+The controls page now uses a single captured native pointer, with Safari
+callout/selection/drag suppression scoped to the pad. It sends neutral on native
+UI interruptions, pointer/touch cancellation, capture loss and lifecycle changes;
+stale moves cannot re-arm it. Tests cover fresh-touch and disconnect/reconnect
+recovery without page reload. The browser verifies capture before each held
+command and cancels a hold after a 200ms control-timer gap. These checks preserve
+the server/lease/firmware watchdogs and the quadratic throttle curve above.
+See the controls README's iPhone section for browser-engine checks and required
+physical-phone validation. Reload the phone page once after updating its assets.
+The November 4 interruption regression run passed all 45 joystick unit/API tests,
+all five ROS integration tests (including the 65-second impaired-link recovery
+soak), 21 browser client/transport and 23 input/UI tests, Chromium/WebKit page
+checks and seven firmware host regressions. No hardware transport was opened.
 
 Quadratic-curve validation on November 4, 2026 passed without skips: 45 joystick
 unit/API tests, all five controls-browser test files, 50 bridge tests, five

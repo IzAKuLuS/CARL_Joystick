@@ -3,9 +3,7 @@
 // Use the actual controls application client against a live joystick server.
 const assert = require("node:assert/strict");
 const Client = require(process.argv[3]);
-const fs = require("node:fs");
 const path = require("node:path");
-const vm = require("node:vm");
 const endpoint = process.argv[2];
 const messages = [];
 const Diagnostics = require(path.join(path.dirname(process.argv[3]), "joystick-diagnostics.js"));
@@ -131,33 +129,16 @@ async function drive(x, y, left, right) {
 }
 
 async function throttleCurveUI() {
-    // Run the actual UI and transport together. The library emits normalized
-    // displacement (not a unit direction); supply its pinned 0.10.2 contract.
-    const elements = new Map(), handlers = new Map();
-    const element = (id) => {
-        if (!elements.has(id)) elements.set(id, {textContent: "", value: "",
-            addEventListener(name, fn) { handlers.set(`${id}:${name}`, fn); }});
-        return elements.get(id);
-    };
-    const moves = new Map();
-    let link;
-    const context = vm.createContext({
-        document: {hidden: false, getElementById: element, addEventListener() {},
-            documentElement: {classList: {contains: () => false}}},
-        window: {addEventListener() {}},
-        location: {protocol: "http:", hostname: "localhost"},
-        localStorage: {getItem: () => endpoint, setItem() {}},
-        CarlRosClient: {endpoint: (url) => url},
-        CarlJoystickClient: class extends Client {
-            constructor(options) { super(options); link = this; }
-        },
-        nipplejs: {create: () => ({on: (name, fn) => moves.set(name, fn)})}
-    });
-    vm.runInContext(fs.readFileSync(path.join(path.dirname(process.argv[3]), "joystick-ui.js"), "utf8"), context);
+    // Actual native input + UI + live WebSocket transport, sharing the DOM
+    // harness with the pointer interruption regressions in the controls repo.
+    const {setup} = require(path.join(path.dirname(process.argv[3]), "../tests/helpers/joystick-dom.js"));
+    const ui = setup({live: true, endpoint});
+    const link = ui.client;
+    const element = ui.element;
     const ready = () => link.connected && link.lastState?.ready
         && !link.lastState.neutral_required && !link.lastState.active;
     try {
-        handlers.get("joystick-connection-form:submit")({preventDefault() {}});
+        ui.connect();
         await waitFor(ready, "UI neutral startup");
         assert.equal(element("joystick-limit").textContent, "75.0%");
         assert.equal(link.lastState.throttle_exponent, 2);
@@ -167,8 +148,8 @@ async function throttleCurveUI() {
                 [0.2, 0.018698060941828257], [0.205, 0.019965373961218832],
                 [0.25, 0.0332409972299169], [0.5, 0.1682825484764543],
                 [0.75, 0.40720221606648194], [0.95, 0.6731301939058171], [1, 0.75]]) {
-                moves.get("start")();
-                moves.get("move")({}, {distance: 75 * travel, vector: {x: 0, y: sign * travel}});
+                ui.pointer("pointerdown");
+                ui.move(0, sign * travel);
                 const expected = sign * output;
                 await waitFor(() => link.lastState?.active
                     && Math.abs(link.lastState.left - expected) < 1e-9
@@ -176,12 +157,37 @@ async function throttleCurveUI() {
                 assert.equal(element("joystick-left").textContent, `${(expected * 100).toFixed(1)}%`);
                 assert.equal(element("joystick-right").textContent, `${(expected * 100).toFixed(1)}%`);
                 await delay(100); // Let ROS and the real bridge encode the sample.
-                moves.get("end")();
+                ui.pointer("pointerup");
                 assert.equal(element("joystick-left").textContent, "0.0%");
                 await waitFor(ready, "UI release");
             }
         }
+        for (const type of ["contextmenu", "dragstart", "pointercancel", "lostpointercapture", "touchcancel"]) {
+            ui.pointer("pointerdown");
+            await waitFor(() => link.lastState?.active && link.lastState.left === 0.75, "drive before native interruption");
+            await delay(300); // Stationary touch must remain a valid hold.
+            assert.equal(link.held, true);
+            if (type === "pointercancel" || type === "lostpointercapture") ui.document.fire(type, {pointerId: 1});
+            else if (type === "touchcancel") ui.document.fire(type, {touches: []});
+            else ui.zone.fire(type);
+            assert.equal(link.held, false);
+            assert.equal(ui.captured.size, 0);
+            await waitFor(ready, "native interruption commands zero");
+            assert.equal(link.lastState.left, 0); assert.equal(link.lastState.right, 0);
+            ui.move(0, 1); await delay(100);
+            assert.equal(link.lastState.active, false, "old gesture cannot re-arm movement");
+        }
+        ui.pointer("pointerdown");
+        await waitFor(() => link.lastState?.active, "fresh touch recovers without reload");
+        ui.element("joystick-disconnect").fire("click");
+        assert.equal(ui.captured.size, 0);
+        await delay(100); ui.connect(); await waitFor(ready, "UI reconnect at neutral");
+        ui.move(0, 1); assert.equal(link.held, false);
+        ui.pointer("pointerdown");
+        await waitFor(() => link.lastState?.active, "fresh touch works after reconnect");
+        ui.pointer("pointerup"); await waitFor(ready, "final UI release");
         console.log("Actual UI + live client: quadratic throttle, center deadzone, 75% cap, signed percentages and release passed");
+        console.log("Native interruptions: copy menu, drag, cancellation, lost capture, stale moves, fresh-touch recovery and reconnect passed");
     } finally { link?.disconnect(); }
 }
 
