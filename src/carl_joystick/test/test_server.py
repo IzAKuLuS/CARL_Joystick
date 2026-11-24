@@ -1,11 +1,28 @@
+import asyncio
 import tempfile
 from pathlib import Path
 import threading
 import time
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from carl_joystick.controller import Controller
+
+
+class HealthSnapshotTest(unittest.TestCase):
+    def test_health_reports_controller_ownership_without_sending_commands(self):
+        from carl_joystick.server import create_app
+        commands = []
+        controller = Controller(lambda *w: commands.append(w), lambda _reason: None)
+        node = SimpleNamespace(lock=threading.RLock(), controller=controller)
+        endpoint = next(route.endpoint for route in create_app(node).routes if route.path == '/health')
+        self.assertFalse(asyncio.run(endpoint())['controller_connected'])
+        controller.owner = object()
+        self.assertTrue(asyncio.run(endpoint())['controller_connected'])
+        controller.owner = None
+        self.assertFalse(asyncio.run(endpoint())['controller_connected'])
+        self.assertEqual(commands, [])
 
 try:
     import httpx  # Starlette raises RuntimeError, rather than ImportError, if absent.
@@ -38,13 +55,16 @@ class ServerTest(unittest.TestCase):
 
     def test_exclusive_session_and_disconnect_zero(self):
         with TestClient(self.app) as client:
+            self.assertFalse(client.get('/health').json()['controller_connected'])
             with client.websocket_connect('/ws') as first:
+                self.assertTrue(client.get('/health').json()['controller_connected'])
                 self.assertTrue(self.neutral(first)['ready'])
                 self.assertTrue(self.send(first, {'type': 'control', 'x': 1, 'y': 0, 'deadman': True})['active'])
                 with client.websocket_connect('/ws') as other:
                     self.assertIn('Another controller', other.receive_json()['error'])
                 self.assertTrue(self.controller.active)
             self.assertIsNone(self.controller.owner)
+            self.assertFalse(client.get('/health').json()['controller_connected'])
             self.assertEqual(self.commands[-1], (0, 0))
             with client.websocket_connect('/ws') as replacement:
                 self.assertFalse(self.neutral(replacement)['active'])

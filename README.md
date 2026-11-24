@@ -62,7 +62,9 @@ ros2 launch carl_joystick joystick.launch.py \
 This serves the controls application at `http://<server-IP>:8001` and joystick
 WebSocket at `ws://<server-IP>:8001/ws`. Omit `controls_dir` to run only the API
 if the controls app is served separately. Override the port with `web_port:=8001`.
-The `/health` endpoint reports command readiness without claiming a controller.
+The `/health` endpoint reports command readiness and `controller_connected`
+without claiming a controller. The local GUI uses that connection flag to
+return to No Control after the phone disconnects.
 
 For live telemetry in the page, also run rosbridge in a terminal sourced with
 ROS and the CARL firmware workspace overlay:

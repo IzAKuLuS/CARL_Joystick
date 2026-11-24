@@ -176,6 +176,7 @@ def create_app(node, controls_dir=''):
     async def health():
         with node.lock:
             state = node.controller.state()
+            state['controller_connected'] = node.controller.owner is not None
         if recorder:
             state['logging'] = recorder.status()
         return state
